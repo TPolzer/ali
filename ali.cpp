@@ -64,16 +64,17 @@ int main() {
     circular_buffer<double> buf(samples);
     double average = 0;
     int expected = -1;
-    double over = 0;
+    double over = 0, inserted = 0;
     while(1) {
         over *= cooldown;
         double value = compute(getAli());
         int old = getBrightness();
         if(expected != -1 && old != expected) {
-            over = (old - value) / (1 - value);
+            over = 1;
+            inserted = old;
             buf.clear();
         }
-        value = over + (1-over)*value;
+        value = over*inserted + (1-over)*value;
         if(buf.size() == samples) {
             average -= buf.back()/samples;
             buf.pop_back();
