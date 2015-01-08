@@ -1,0 +1,8 @@
+[Unit]
+Description=Automatic Backlight
+
+[Service]
+ExecStart=/usr/bin/ali
+
+[Install]
+WantedBy=multi-user.target
