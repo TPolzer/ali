@@ -4,6 +4,7 @@
 #include <thread>
 #include <boost/circular_buffer.hpp>
 #include <cmath>
+#include <regex>
 
 using namespace std;
 using namespace boost;
@@ -12,6 +13,8 @@ const static char * const ENABLE_ALI = "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACP
 const static char * const BRIGHT = "/sys/devices/pci0000:00/0000:00:02.0/drm/card0/card0-eDP-1/intel_backlight/brightness";
 const static char * const ALI = "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0008:00/ali";
 const static char * const AC = "/sys/bus/acpi/drivers/ac/ACPI0003:00/power_supply/AC0/online";
+const static char * const LID = "/proc/acpi/button/lid/LID/state";
+const static regex LIDOPEN {"open"};
 const static size_t samples = 10;
 const static auto interval = std::chrono::seconds(4);
 const static int MAX_ILLU = 6407;
@@ -20,6 +23,13 @@ const static int MIN_AC_BRIGHT = 250;
 const static int MAX_BRIGHT = 937;
 const static double cooldown = .95;
 const static double exponent = 0.3;
+
+static bool getLidStatus() {
+    ifstream lid(LID);
+    string lidStatus;
+    getline(lid, lidStatus);
+    return regex_search(begin(lidStatus), end(lidStatus), LIDOPEN);
+}
 
 static int getAli() {
     ifstream ali(ALI);
@@ -67,26 +77,37 @@ int main() {
     double over = 0, inserted = 0;
     while(1) {
         over *= cooldown;
-        double value = compute(getAli());
-        int old = getBrightness();
-        if(expected != -1 && old != expected) {
-            over = 1;
-            inserted = old;
-            buf.clear();
-        }
-        value = over*inserted + (1-over)*value;
-        if(buf.size() == samples) {
-            average -= buf.back()/samples;
+        if(getLidStatus()) {
+            double value = compute(getAli());
+            int old = getBrightness();
+            if(expected != -1 && old != expected) {
+                over = 1;
+                inserted = old;
+                buf.clear();
+            }
+            value = over*inserted + (1-over)*value;
+            if(buf.size() == samples) {
+                average -= buf.back()/samples;
+                buf.pop_back();
+            } else {
+                average *= buf.size();
+                average /= buf.size() + 1;
+            }
+            buf.push_front(value);
+            average += value / buf.size();
+        } else if(buf.size()) {
+            double out = *buf.rbegin();
+            if(buf.size() != 1) {
+                average -= out / buf.size();
+                average *= buf.size();
+                average /= buf.size()-1;
+            }
             buf.pop_back();
-        } else {
-            average *= buf.size();
-            average /= buf.size() + 1;
         }
-        buf.push_front(value);
-        average += value / buf.size();
-        expected = round(average);
-        setBrightness(expected);
-        
+        if(buf.size()) {
+            expected = round(average);
+            setBrightness(expected);
+        }
         this_thread::sleep_for( interval );
     }
 }
