@@ -101,8 +101,8 @@ int main() {
                 average -= out / buf.size();
                 average *= buf.size();
                 average /= buf.size()-1;
+                buf.pop_back();
             }
-            buf.pop_back();
         }
         if(buf.size()) {
             expected = round(average);
